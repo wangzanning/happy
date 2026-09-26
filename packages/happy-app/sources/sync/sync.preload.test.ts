@@ -414,3 +414,37 @@ describe('chat preload sync integration', () => {
         expect(older).not.toHaveBeenCalled();
     });
 });
+describe('paged project session catalog', () => {
+    it('loads session metadata incrementally without fetching message history', async () => {
+        engine.projectsSync = { invalidate: vi.fn() };
+        engine.credentials = { token: 'test', secret: 'secret' };
+        engine.encryption = {
+            initializeSessions: vi.fn(),
+            getSessionEncryption: () => ({ decryptMetadata: async () => ({ path: '/repo', machineId: 'mac', lifecycleState: 'archived' }), decryptAgentState: async () => null }),
+        };
+        const record = (id: string) => ({ id, seq: 0, metadata: 'opaque', metadataVersion: 1, agentState: null, agentStateVersion: 0, dataEncryptionKey: null, active: false, updatedAt: 1, createdAt: 1 });
+        const fetchPage = vi.fn()
+            .mockResolvedValueOnce(Response.json({ sessions: [record('a')], hasNext: true, nextCursor: 'cursor_v1_a' }))
+            .mockResolvedValueOnce(Response.json({ sessions: [record('b')], hasNext: false, nextCursor: null }));
+        vi.stubGlobal('fetch', fetchPage);
+        await engine.fetchSessions();
+        expect(fetchPage).toHaveBeenCalledTimes(1);
+        expect(fetchPage.mock.calls[0][0]).toContain('/v2/sessions?limit=40');
+        expect(mocks.state.sessions.a.metadata.path).toBe('/repo');
+        await Promise.all(Array.from({ length: 10 }, () => engine.sessionCatalog.loadMore()));
+        expect(fetchPage).toHaveBeenCalledTimes(2);
+        expect(fetchPage.mock.calls[1][0]).toContain('cursor=cursor_v1_a');
+        expect(mocks.state.sessions.a).toBeDefined();
+        expect(mocks.state.sessions.b.metadata.lifecycleState).toBe('archived');
+        expect(mocks.request).not.toHaveBeenCalled();
+        await engine.sessionCatalog.loadMore();
+        expect(fetchPage).toHaveBeenCalledTimes(2);
+        fetchPage.mockResolvedValueOnce(Response.json({ sessions: [record('old-active')] }));
+        await engine.fetchSessions();
+        expect(fetchPage.mock.calls[2][0]).toContain('/v1/sessions');
+        expect(mocks.state.sessions['old-active']).toBeDefined();
+        await engine.sessionCatalog.loadMore();
+        expect(fetchPage).toHaveBeenCalledTimes(3);
+        expect(mocks.request).not.toHaveBeenCalled();
+    });
+});

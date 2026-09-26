@@ -1,6 +1,8 @@
+import { sync } from '@/sync/sync';
 import * as React from 'react';
 import {
     FlatList,
+    ActivityIndicator,
     LayoutAnimation,
     NativeScrollEvent,
     NativeSyntheticEvent,
@@ -28,13 +30,13 @@ import { Modal } from '@/modal';
 import { t } from '@/text';
 import {
     storage,
+    usePersistentProjectListViewData,
     useAllMachines,
     useLocalSetting,
     useSessionGitStatus,
     useSettingMutable,
     type SessionRowData,
 } from '@/sync/storage';
-import { useHasArchivedSessions, useVisibleSessionListViewData } from '@/hooks/useVisibleSessionListViewData';
 import {
     buildProjectHomeRows,
     workspaceOrigin,
@@ -100,30 +102,24 @@ export interface ProjectHomeListLayout {
 }
 
 /**
- * The home screen grouped by project: one card per project, going by the
- * project's name, with that project's worktrees nested under it on a tree line
- * dropped from its avatar.
- *
- * The project's own checkout is the card itself rather than a row of its own,
- * so the main chat is always one tap away — the chevron folds the worktrees
- * away and never the card. Chats are not rows here at all; a checkout opens its
- * most recent chat and the rest sit beside it as tabs on the session screen.
- *
- * The archive trails the projects as a flat, date-grouped tail. Retired chats
- * stay out of the project cards, but the divider below them can reveal or hide
- * the same archive that the flat home list shows.
+ * One project card followed by its individually virtualized chat rows.
+ * Archived/offline chats retain project membership; only retired bots use
+ * the separate archive tail. Older metadata pages load as the user scrolls.
  */
 export const ProjectHomeList = React.memo((props: ProjectHomeListLayout) => {
-    const data = useVisibleSessionListViewData();
+    const data = usePersistentProjectListViewData();
+    const catalog = React.useSyncExternalStore(sync.sessionCatalog.subscribe, sync.sessionCatalog.getSnapshot);
+    const loadMore = React.useCallback(() => { void sync.sessionCatalog.loadMore().catch(() => {}); }, []);
     const machines = useAllMachines();
     const expanded = useLocalSetting('expandedProjects');
-    const hasArchivedSessions = useHasArchivedSessions();
+    const hasArchivedSessions = (data ?? []).some(item => item.type === 'session' && item.session.archived);
     // Stored under its original `hideInactiveSessions` key — synced settings
     // have no rename migration — but it hides archived sessions only.
     const [archiveHidden, setArchiveHidden] = useSettingMutable('hideInactiveSessions');
 
     const rows = React.useMemo(() => buildProjectHomeRows({
         data: data ?? [],
+        showSessions: true,
         machines,
         unknownMachineText: t('status.unknown'),
         expanded,
@@ -158,7 +154,7 @@ export const ProjectHomeList = React.memo((props: ProjectHomeListLayout) => {
         });
     }, []);
 
-    return <ProjectHomeListView rows={rows} onToggle={toggle} onToggleArchive={toggleArchive} {...props} />;
+    return <ProjectHomeListView catalog={catalog} loadMore={loadMore} rows={rows} onToggle={toggle} onToggleArchive={toggleArchive} {...props} />;
 });
 
 /**
@@ -167,6 +163,8 @@ export const ProjectHomeList = React.memo((props: ProjectHomeListLayout) => {
  */
 export const ProjectHomeListView = React.memo(({
     rows,
+    catalog,
+    loadMore,
     onToggle,
     onToggleArchive,
     topContentInset = 0,
@@ -175,6 +173,8 @@ export const ProjectHomeListView = React.memo(({
     onScroll,
 }: ProjectHomeListLayout & {
     rows: ProjectHomeRow[];
+    catalog?: { loading: boolean; hasMore: boolean; error: boolean };
+    loadMore?: () => void;
     onToggle: (projectId: string) => void;
     onToggleArchive?: () => void;
 }) => {
@@ -192,6 +192,7 @@ export const ProjectHomeListView = React.memo(({
             case 'worktreeToggle': return `worktree-toggle-${row.toggle.projectId}`;
             case 'archiveToggle': return 'archive-toggle';
             case 'archiveHeader': return `archive-header-${row.title}`;
+            case 'projectChat': return `project-chat-${row.session.id}`;
             case 'archived': return `archived-${row.session.id}`;
         }
     }, []);
@@ -243,6 +244,8 @@ export const ProjectHomeListView = React.memo(({
                         <Text style={styles.sectionText}>{item.title}</Text>
                     </View>
                 );
+            case 'projectChat':
+                return <ChatRow session={item.session} archived={item.session.archived} />;
             case 'archived':
                 return <ChatRow session={item.session} archived />;
         }
@@ -260,6 +263,13 @@ export const ProjectHomeListView = React.memo(({
             <View style={styles.contentContainer}>
                 <FlatList
                     data={rows}
+                    onEndReached={() => { if (catalog?.hasMore && !catalog.loading && !catalog.error) loadMore?.(); }}
+                    onEndReachedThreshold={0.5}
+                    ListFooterComponent={catalog?.loading ? <ActivityIndicator /> : catalog?.hasMore ? (
+                        <Pressable onPress={loadMore} accessibilityRole="button" style={{ padding: 20 }}>
+                            <Text>{catalog.error ? t('common.retry') : t('common.loadMore')}</Text>
+                        </Pressable>
+                    ) : null}
                     renderItem={renderItem}
                     keyExtractor={keyExtractor}
                     ListHeaderComponent={ListHeader}

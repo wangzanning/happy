@@ -94,6 +94,7 @@ function shape(rows: ReturnType<typeof build>): string[] {
                 : `toggle:+${item.toggle.hiddenCount}`;
             case 'archiveToggle': return item.hidden ? 'archive:show' : 'archive:hide';
             case 'archiveHeader': return `archiveHeader:${item.title}`;
+            case 'projectChat': return `chat:${item.session.id}`;
             case 'archived': return `archived:${item.session.id}`;
         }
     });
@@ -505,5 +506,22 @@ describe('workspaceOrigin', () => {
         expect(workspaceOrigin(row({ id: 'a', path: '/repo', machineId: null }))).toBeNull();
         expect(workspaceOrigin(row({ id: 'a', path: null }))).toBeNull();
         expect(workspaceOrigin(row({ id: 'a', path: '   ' }))).toBeNull();
+    });
+});
+
+
+describe('persistent project chats', () => {
+    it('keeps every archived/offline/worktree chat under its project as individual virtualized rows', () => {
+        const sessions = Array.from({ length: 80 }, (_, i) => row({ id: `s${i}`, archived: i > 0, active: i === 0, lastActivityAt: 80 - i }));
+        const data = [project('repo', 'happy', [
+            { id: '', name: null, sessions: sessions.slice(0, 40) },
+            { id: '/repo/.worktrees/a', name: 'branch-a', sessions: sessions.slice(40) },
+        ])];
+        const rows = buildProjectHomeRows({ data, machines: [], unknownMachineText: 'unknown', expanded: {}, labels: { bots: 'Bots', projects: 'Projects' }, showSessions: true });
+        expect(rows.filter(row => row.type === 'project')).toHaveLength(1);
+        const chats = rows.filter(row => row.type === 'projectChat');
+        expect(chats).toHaveLength(80);
+        expect(new Set(chats.map(row => row.session.id)).size).toBe(80);
+        expect(rows.some(row => row.type === 'archived')).toBe(false);
     });
 });

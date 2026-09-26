@@ -128,9 +128,11 @@ export type ProjectHomeRow =
      * the flat layout: a retired chat belongs to no checkout in flight, and
      * its worktree is frequently no longer on disk.
      */
-    | { type: 'archived'; session: SessionRowData };
+    | { type: 'archived'; session: SessionRowData }
+    | { type: 'projectChat'; projectId: string; session: SessionRowData };
 
 interface BuildOptions {
+    showSessions?: boolean;
     data: readonly SessionListViewItem[];
     machines: readonly SessionDisplayMachine[];
     unknownMachineText: string;
@@ -262,6 +264,7 @@ function machineRank(section: MachineSection): number {
 function projectRows(
     project: ProjectGroupData,
     expanded: Readonly<Record<string, boolean>>,
+    showSessions = false,
 ): ProjectHomeRow[] {
     const checkouts = project.workspaces
         .map((workspace) => toWorktree(project, workspace))
@@ -289,6 +292,15 @@ function projectRows(
             live: isLive(ownTabs),
         },
     });
+
+    if (showSessions) {
+        // Individual rows stay virtualized by the outer list. History remains
+        // under its stable project, including retired/offline sessions.
+        const sessions = checkouts.flatMap(checkout => checkout.tabs)
+            .sort((a, b) => b.lastActivityAt - a.lastActivityAt || a.id.localeCompare(b.id));
+        for (const session of sessions) rows.push({ type: 'projectChat', projectId: project.id, session });
+        return rows;
+    }
 
     const projectExpanded = !!expanded[project.id];
     const shown = projectExpanded
@@ -350,6 +362,7 @@ export function buildProjectHomeRows({
     unknownMachineText,
     expanded,
     labels,
+    showSessions = false,
     hasArchivedSessions = false,
     archiveHidden = true,
 }: BuildOptions): ProjectHomeRow[] {
@@ -395,7 +408,7 @@ export function buildProjectHomeRows({
     for (const group of buildSessionProjectDisplayGroups(data, machines, unknownMachineText)) {
         const section = sectionFor(group.machineId);
         for (const { project } of group.projects) {
-            const built = projectRows(project, expanded);
+            const built = projectRows(project, expanded, showSessions);
             if (built.length === 0) continue;
             section.projects.push(...built);
             for (const workspace of project.workspaces) seen(section, workspace.sessions);
