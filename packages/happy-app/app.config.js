@@ -1,12 +1,15 @@
 const { execFileSync } = require('node:child_process');
 
 const variant = process.env.APP_ENV || 'development';
+const isCustom = variant === 'custom';
 const name = {
+    custom: "Happy Custom",
     development: "Happy (dev)",
     preview: "Happy (preview)",
     production: "Happy"
 }[variant];
 const bundleId = {
+    custom: "com.wangzanning.happy",
     development: "com.slopus.happy.dev",
     preview: "com.slopus.happy.preview",
     production: "com.ex3ndr.happy"
@@ -14,11 +17,13 @@ const bundleId = {
 // const stagingElevenLabsAgentId = 'agent_7801k2c0r5hjfraa1kdbytpvs6yt';
 const productionElevenLabsAgentId = 'agent_6701k211syvvegba4kt7m68nxjmw';
 const elevenLabsAgentId = {
+    custom: productionElevenLabsAgentId,
     development: productionElevenLabsAgentId,
     preview: productionElevenLabsAgentId,
     production: productionElevenLabsAgentId,
 }[variant];
 const consoleLoggingDefault = {
+    custom: false,
     development: true,
     preview: true,
     production: false,
@@ -112,7 +117,7 @@ export default {
                 "android.permission.READ_MEDIA_VIDEO",
             ],
             package: bundleId,
-            googleServicesFile: "./google-services.json",
+            ...(isCustom ? {} : { googleServicesFile: "./google-services.json" }),
             intentFilters: variant === 'production' ? [
                 {
                     "action": "VIEW",
@@ -207,7 +212,7 @@ export default {
                 }
             ]
         ],
-        updates: {
+        updates: isCustom ? { enabled: false } : {
             url: "https://u.expo.dev/4558dd3d-cd5a-47cd-bad9-e591a241cc06",
             requestHeaders: {
                 "expo-channel-name": "production"
