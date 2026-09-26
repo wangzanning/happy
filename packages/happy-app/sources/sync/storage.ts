@@ -92,7 +92,7 @@ function isSessionActive(session: { active: boolean; activeAt: number }): boolea
 function isSessionArchived(session: Session, archiving: ReadonlySet<string>): boolean {
     return archiving.has(session.id)
         || session.metadata?.lifecycleState === 'archived'
-        || (!isRigMetadata(session.metadata) && !session.active);
+        || (!isRigMetadata(session.metadata) && !session.active && session.metadata?.lifecycleState !== 'disconnected');
 }
 
 /** For the handful of reads that happen outside a rebuild. */

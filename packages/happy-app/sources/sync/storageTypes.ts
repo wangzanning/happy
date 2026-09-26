@@ -205,6 +205,7 @@ export const MetadataSchema = z.object({
     lifecycleStateSince: z.number().optional(),
     archivedBy: z.string().optional(),
     archiveReason: z.string().optional(),
+    desktopReleaseRequestId: z.string().optional(),
     /**
      * Lineage for sessions created via the fork / duplicate flow.
      * `parentSessionId` is the Happy session this one was branched from.

@@ -94,6 +94,7 @@ function shape(rows: ReturnType<typeof build>): string[] {
                 : `toggle:+${item.toggle.hiddenCount}`;
             case 'archiveToggle': return item.hidden ? 'archive:show' : 'archive:hide';
             case 'archiveHeader': return `archiveHeader:${item.title}`;
+            case 'folder': return `folder:${item.title}`;
             case 'projectChat': return `chat:${item.session.id}`;
             case 'archived': return `archived:${item.session.id}`;
         }
@@ -512,16 +513,41 @@ describe('workspaceOrigin', () => {
 
 describe('persistent project chats', () => {
     it('keeps every archived/offline/worktree chat under its project as individual virtualized rows', () => {
-        const sessions = Array.from({ length: 80 }, (_, i) => row({ id: `s${i}`, archived: i > 0, active: i === 0, lastActivityAt: 80 - i }));
+        const sessions = Array.from({ length: 80 }, (_, i) => row({ path: '/repo', id: `s${i}`, archived: i > 0, active: i === 0, lastActivityAt: 80 - i }));
         const data = [project('repo', 'happy', [
             { id: '', name: null, sessions: sessions.slice(0, 40) },
             { id: '/repo/.worktrees/a', name: 'branch-a', sessions: sessions.slice(40) },
         ])];
-        const rows = buildProjectHomeRows({ data, machines: [], unknownMachineText: 'unknown', expanded: {}, labels: { bots: 'Bots', projects: 'Projects' }, showSessions: true });
-        expect(rows.filter(row => row.type === 'project')).toHaveLength(1);
+        const rows = buildProjectHomeRows({ data, machines: [], unknownMachineText: 'unknown', expanded: { 'sidebar:project:["machine-a","/repo"]': true }, labels: { bots: 'Bots', projects: 'Projects' }, showSessions: true });
+        expect(rows.filter(row => row.type === 'folder')).toHaveLength(1);
         const chats = rows.filter(row => row.type === 'projectChat');
         expect(chats).toHaveLength(80);
         expect(new Set(chats.map(row => row.session.id)).size).toBe(80);
         expect(rows.some(row => row.type === 'archived')).toBe(false);
+    });
+});
+
+ describe('project sidebar folders', () => {
+    it('collapses projects and Recents independently, without machine/source sections', () => {
+        const data = [project('repo', 'happy', [{ id: '', name: null, sessions: [
+            row({ id: 'project', path: '/work/repo' }),
+            row({ id: 'scratch', path: '/Users/me/Documents/Codex/2026-09-27/chat' }),
+            row({ id: 'home', path: '/Users/me', homeDir: '/Users/me' }),
+        ] }])];
+        const options = { data, machines: [], unknownMachineText: '?', expanded: {}, labels: { bots: 'Bots', projects: 'Projects', recent: '最近' }, showSessions: true };
+        const closed = buildProjectHomeRows(options);
+        expect(closed.map(r => r.type)).toEqual(['folder', 'folder']);
+        expect(closed[1]).toMatchObject({ title: '最近', count: 2, expanded: false });
+        const open = buildProjectHomeRows({ ...options, expanded: { 'sidebar:recents': true } });
+        expect(open.filter(r => r.type === 'projectChat').map(r => r.session.id)).toEqual(['home', 'scratch']);
+    });
+    it('honors explicit project identity even in a generated directory and distinguishes machines', () => {
+        const data = [project('saved', 'rig', [{ id: '', name: null, sessions: [
+            row({ id: 'a', path: '/Users/me/Documents/ChatGPT/chat', projectId: 'saved', projectName: 'Saved' }),
+            row({ id: 'b', path: '/Users/me/Documents/ChatGPT/chat', projectId: 'saved', projectName: 'Saved', machineId: 'other' }),
+        ] }])];
+        const rows = buildProjectHomeRows({ data, machines: [], unknownMachineText: '?', expanded: {}, labels: { bots: 'Bots', projects: 'Projects' }, showSessions: true });
+        expect(rows).toHaveLength(2);
+        expect(rows.every(r => r.type === 'folder' && !r.recent)).toBe(true);
     });
 });

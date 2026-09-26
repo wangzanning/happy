@@ -383,8 +383,8 @@ export const en: TranslationStructure = {
     sessionInfo: {
         releaseDesktop: "Disconnect and return to desktop",
         releaseDesktopSubtitle: "Stop Happy’s Codex process so the desktop can resume this thread",
-        releaseDesktopWarning: "This stops the running task and archives this Happy session. Conversation history and project files are retained. After disconnection, resume the original thread on your desktop.",
-        releaseDesktopDone: "The session has stopped. You can resume the original thread on your desktop. Happy history remains in archived sessions.",
+        releaseDesktopWarning: "This stops the running task and releases the Codex connection without archiving. The conversation stays in its project or Recents. You can continue on your desktop, or reconnect from Happy later.",
+        releaseDesktopDone: "Disconnected without archiving. Continue on your desktop, or reconnect from Happy later.",
         releaseDesktopFailed: "Could not confirm disconnection. This feature requires the matching custom Happy CLI on your Mac. Check its version and connection before retrying; desktop access is not yet confirmed.",
 
         // Used by Session Info screen (app/(app)/session/[id]/info.tsx)
@@ -580,6 +580,7 @@ export const en: TranslationStructure = {
     },
 
     sidebar: {
+        recent: "Recents",
         sessionsTitle: 'Happy',
         showArchived: 'Show archived',
         hideArchived: 'Hide archived',

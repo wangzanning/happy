@@ -15,3 +15,12 @@ Project mode is the default for new settings. An existing explicitly saved flat 
 - Grouping coverage checks stable project membership after the last active session is archived and 80 independently addressable chat rows across worktrees.
 - App typecheck and full Vitest suite are run before merging. The upstream `sessionPresentation.test.ts` initialization failure (`__DEV__ is not defined`) is a known baseline failure, unrelated to these changes.
 - Android physical-device scrolling/crash behavior still requires installing the custom build; no APK or installed Mac service is changed by this source merge.
+
+
+## Collapsible sidebar (Android build 2)
+
+Project mode now renders one collapsible folder per project, followed by a separate collapsible Recents folder. All groups start collapsed and remember expansion locally. Expanded sessions are individual indented virtualized rows, sorted by recent activity. The outer list has no machine/bot/source sections; identical project names on different machines have a machine suffix. Existing explicit flat-layout preferences remain selectable in the home menu.
+
+Project identity uses explicit session project metadata when present, otherwise machine + working-directory/repository path. Missing paths, home/root/tmp paths, and generated Documents/Codex/date or Documents/ChatGPT task directories go into Recents unless an explicit project identity overrides that inference. This is a mobile-side grouping rule, not a complete import of the Codex desktop saved-project registry.
+
+Only an actual user scroll can trigger another catalog page automatically; collapsing folders or initially mounting a short list cannot drain all history pages. The load-more/retry footer remains available when collapsed folders do not fill the viewport. Folder counts reflect loaded metadata, not server-wide totals.
