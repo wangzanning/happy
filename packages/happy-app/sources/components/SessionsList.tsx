@@ -1,5 +1,6 @@
+import { sync } from '@/sync/sync';
 import React from 'react';
-import { View, Pressable, FlatList, NativeScrollEvent, NativeSyntheticEvent, Platform } from 'react-native';
+import { View, Pressable, FlatList, ActivityIndicator, NativeScrollEvent, NativeSyntheticEvent, Platform } from 'react-native';
 import { Text } from '@/components/StyledText';
 import { usePathname, useRouter } from 'expo-router';
 import { SessionListViewItem, SessionRowData, useAllMachines, useSetting, useSettingMutable } from '@/sync/storage';
@@ -322,6 +323,8 @@ export function SessionsList({
 } = {}) {
     const styles = stylesheet;
     const safeArea = useSafeAreaInsets();
+    const catalog = React.useSyncExternalStore(sync.sessionCatalog.subscribe, sync.sessionCatalog.getSnapshot);
+    const loadMore = React.useCallback(() => { void sync.sessionCatalog.loadMore().catch(() => {}); }, []);
     const sourceData = useVisibleSessionListViewData();
     const hasArchivedSessions = useHasArchivedSessions();
     // Stored under its original `hideInactiveSessions` key — synced settings
@@ -587,6 +590,13 @@ export function SessionsList({
             <View style={styles.contentContainer}>
                 <FlatList
                     data={data}
+                    onEndReached={() => { if (catalog.hasMore && !catalog.loading && !catalog.error) loadMore(); }}
+                    onEndReachedThreshold={0.5}
+                    ListFooterComponent={catalog.loading ? <ActivityIndicator /> : catalog.hasMore ? (
+                        <Pressable onPress={loadMore} accessibilityRole="button" style={{ padding: 20 }}>
+                            <Text>{catalog.error ? t('common.retry') : t('common.loadMore')}</Text>
+                        </Pressable>
+                    ) : null}
                     renderItem={renderItem}
                     keyExtractor={keyExtractor}
                     extraData={selectedSessionId}

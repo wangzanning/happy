@@ -1,3 +1,5 @@
+import { sync } from '@/sync/sync';
+import { usePersistentProjectListViewData } from '@/sync/storage';
 import * as React from 'react';
 import { View, ActivityIndicator, NativeScrollEvent, NativeSyntheticEvent } from 'react-native';
 import { StyleSheet, useUnistyles } from 'react-native-unistyles';
@@ -52,15 +54,17 @@ export const SessionsListWrapper = React.memo(({
     onScroll?: (event: NativeSyntheticEvent<NativeScrollEvent>) => void;
 }) => {
     const { theme } = useUnistyles();
-    const sessionListViewData = useVisibleSessionListViewData();
+    const catalog = React.useSyncExternalStore(sync.sessionCatalog.subscribe, sync.sessionCatalog.getSnapshot);
+    const visibleData = useVisibleSessionListViewData();
+    const projectData = usePersistentProjectListViewData();
     const hasArchivedSessions = useHasArchivedSessions();
     const machines = useAllMachines({ includeOffline: true });
     const machineChoices = React.useMemo(() => collectMachineChoices(machines), [machines]);
     const onlineMachineCount = machineChoices.filter((machine) => machine.online).length;
     const [, setHideArchivedSessions] = useSettingMutable('hideInactiveSessions');
-    // The activity-sorted chat list is the default; the project hierarchy —
-    // project, then checkout, with chats as tabs — is the other layout.
+    // Project history is the default; honor an explicitly saved flat layout.
     const groupByProject = useSetting('sessionListGrouping') === 'project';
+    const sessionListViewData = groupByProject ? projectData : visibleData;
     const styles = stylesheet;
 
     if (sessionListViewData === null) {
@@ -73,6 +77,15 @@ export const SessionsListWrapper = React.memo(({
                 </View>
             </View>
         );
+    }
+
+    // A page containing only hidden records is not the end of the catalog.
+    // Keep the pager reachable instead of stranding older projects behind the
+    // no-sessions/offline placeholder.
+    if (sessionListViewData.length === 0 && catalog.hasMore) {
+        return groupByProject
+            ? <ProjectHomeList topContentInset={topContentInset} scrollIndicatorTopInset={scrollIndicatorTopInset} bottomContentInset={bottomContentInset} onScroll={onScroll} />
+            : <SessionsList topContentInset={topContentInset} scrollIndicatorTopInset={scrollIndicatorTopInset} bottomContentInset={bottomContentInset} onScroll={onScroll} />;
     }
 
     const emptyState = resolveHomeEmptyState({

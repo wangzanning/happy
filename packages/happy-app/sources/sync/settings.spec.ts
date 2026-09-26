@@ -193,7 +193,7 @@ describe('settings', () => {
                 agentInputEnterToSend: true,
                 avatarStyle: 'brutalist',
                 avatarMonochrome: false,
-                sessionListGrouping: 'flat',
+                sessionListGrouping: 'project',
                 showFlavorIcons: false,
                 showHarnessIconInSessionHeader: true,
                 userMessageBubbleColor: 'gray',

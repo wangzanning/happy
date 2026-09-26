@@ -1,3 +1,4 @@
+import { SessionCatalogPager } from './sessionCatalogPager';
 import Constants from 'expo-constants';
 import * as Device from 'expo-device';
 import { apiSocket, getCurrentAppState, getHappyClientId } from '@/sync/apiSocket';
@@ -144,6 +145,7 @@ class Sync {
     anonID!: string;
     private credentials!: AuthCredentials;
     public encryptionCache = new EncryptionCache();
+    readonly sessionCatalog = new SessionCatalogPager(cursor => this.fetchSessionPage(cursor));
     private sessionsSync: InvalidateSync;
     private projectsSync: InvalidateSync;
     private messagesSync = new Map<string, InvalidateSync>();
@@ -294,6 +296,7 @@ class Sync {
 
     async create(credentials: AuthCredentials, encryption: Encryption) {
         this.sessionAvatars.clear();
+        this.sessionCatalog.reset();
         this.credentials = credentials;
         this.encryption = encryption;
         this.anonID = encryption.anonID;
@@ -314,6 +317,7 @@ class Sync {
         this.sessionAvatars.clear();
         // NOTE: No awaiting anything here, we're restoring from a disk (ie app restarted)
         // Purchases sync is invalidated in #init() and will complete asynchronously
+        this.sessionCatalog.reset();
         this.credentials = credentials;
         this.encryption = encryption;
         this.anonID = encryption.anonID;
@@ -1258,12 +1262,23 @@ class Sync {
 
     private fetchSessions = async () => {
         if (!this.credentials) return;
+        // History is ordered by ID for stable cursors. Subsequent live refreshes
+        // must also discover old sessions with recent activity outside that window.
+        // The legacy endpoint is bounded to 150 metadata records (no messages).
+        if (this.sessionCatalog.initializedOnce) await this.fetchSessionPage(undefined, true);
+        else await this.sessionCatalog.refresh();
+    }
+
+    private fetchSessionPage = async (cursor?: string, recentActivity = false) => {
+        const credentials = this.credentials;
+        if (!credentials) throw new Error('Not authenticated');
         const avatarsBeforeFetch = storage.getState().sessions;
 
         const API_ENDPOINT = getServerUrl();
-        const response = await fetch(`${API_ENDPOINT}/v1/sessions`, {
+        const endpoint = recentActivity ? '/v1/sessions' : `/v2/sessions?limit=40${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`;
+        const response = await fetch(`${API_ENDPOINT}${endpoint}`, {
             headers: {
-                'Authorization': `Bearer ${this.credentials.token}`,
+                'Authorization': `Bearer ${credentials.token}`,
                 'Content-Type': 'application/json',
                 'X-Happy-Client': getHappyClientId(),
             }
@@ -1274,6 +1289,7 @@ class Sync {
         }
 
         const data = await response.json();
+        if (this.credentials !== credentials) throw new Error('Account changed');
         const sessions = data.sessions as Array<{
             id: string;
             tag: string;
@@ -1359,6 +1375,7 @@ class Sync {
         //   thinking in the meantime.
         // - Gated on `active`: a dead session can never send the clearing
         //   ephemeral, so a preserved `true` would otherwise be immortal.
+        if (this.credentials !== credentials) throw new Error('Account changed');
         const current = storage.getState().sessions;
         this.applySessions(decryptedSessions.map(s => ({
             ...s,
@@ -1381,6 +1398,7 @@ class Sync {
             .slice(0, 12)
             .map((s) => s.id);
         console.log(`[perf] recent-sessions ${recent.join(',')}`);
+        return { nextCursor: data.nextCursor ?? null, hasNext: data.hasNext === true };
     }
 
     public refreshMachines = async () => {

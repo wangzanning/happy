@@ -395,6 +395,7 @@ function buildSessionListViewData(
     // and a rebuild that forgot which ones those are puts them all back.
     archivingSessionIds: ReadonlySet<string>,
     projects: Record<string, Project> = {},
+    retainProjectHistory = false,
 ): SessionListViewItem[] {
     const rigProjectSessions: Session[] = [];
     const botSessions: Session[] = [];
@@ -408,8 +409,8 @@ function buildSessionListViewData(
         if (session.metadata?.isSideChat) {
             return;
         }
-        // The archive is a flat chronological tail, not part of any project.
-        if (isSessionArchived(session, archivingSessionIds)) {
+        // Flat mode keeps an archive tail; project mode retains regular history.
+        if (isSessionArchived(session, archivingSessionIds) && (!retainProjectHistory || session.metadata?.bot)) {
             archivedSessions.push(session);
             return;
         }
@@ -1835,6 +1836,14 @@ export function useAllMachines(options?: { includeOffline?: boolean }): Machine[
 
 export function useMachine(machineId: string): Machine | null {
     return storage(useShallow((state) => state.machines[machineId] ?? null));
+}
+
+export function usePersistentProjectListViewData(): SessionListViewItem[] | null {
+    const inputs = storage(useShallow(state => [state.isDataReady, state.sessions, state.unreadSessionIds,
+        state.machines, state.archivingSessionIds, state.projects] as const));
+    return React.useMemo(() => inputs[0]
+        ? buildSessionListViewData(inputs[1], inputs[2], inputs[3], inputs[4], inputs[5], true)
+        : null, [inputs]);
 }
 
 export function useSessionListViewData(): SessionListViewItem[] | null {
