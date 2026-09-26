@@ -143,7 +143,13 @@ function stringSetsEqual(a: ReadonlySet<string>, b: ReadonlySet<string>): boolea
  */
 function windowEndForTurn(messages: Message[], desiredEnd: number): number {
     let end = Math.min(desiredEnd, messages.length);
-    while (end > 0 && end < messages.length) {
+    // Android must not admit an entire tool-heavy turn during first paint.
+    // Keep a small lookahead for ordinary turn boundaries; the rest remains
+    // reachable through the existing history pager.
+    const limit = Platform.OS === 'android'
+        ? Math.min(messages.length, end + WINDOW_PAGE)
+        : messages.length;
+    while (end > 0 && end < limit) {
         const message = messages[end - 1];
         if (message.kind === 'user-text' && !message.pending && message.sendError === undefined) break;
         end++;
@@ -303,12 +309,15 @@ const ChatListInternal = React.memo((props: {
     const windowRef = React.useRef<Message[]>(EMPTY_MESSAGES);
     const windowedMessages = React.useMemo(() => {
         if (messages.length === 0) return EMPTY_MESSAGES;
-        let desiredEnd = INITIAL_WINDOW;
+        let desiredEnd = windowEndForTurn(messages, INITIAL_WINDOW);
         if (oldestRenderedId !== null) {
             const index = messages.findIndex((msg) => msg.id === oldestRenderedId);
             if (index >= 0) desiredEnd = index + 1;
         }
-        const next = messages.slice(0, windowEndForTurn(messages, desiredEnd));
+        // A pinned boundary has already been aligned when it was requested.
+        // Re-aligning on every store update would silently grow a capped
+        // Android window as background history arrives.
+        const next = messages.slice(0, Platform.OS === 'android' ? desiredEnd : windowEndForTurn(messages, desiredEnd));
         const prev = windowRef.current;
         if (prev.length === next.length && prev.every((msg, i) => msg === next[i])) {
             return prev;
@@ -317,6 +326,13 @@ const ChatListInternal = React.memo((props: {
         return next;
     }, [messages, oldestRenderedId]);
 
+    React.useEffect(() => {
+        listReadyRef.current = false;
+        requestedWindowEndRef.current = 0;
+        setOldestRenderedId(null);
+        setOlderBlocked(null);
+    }, [props.sessionId]);
+
     // Pin the window's oldest message once history is available, so a new
     // message extends the window rather than pushing the oldest rendered one
     // out of it — which would shorten the conversation from under the reader.
@@ -324,13 +340,6 @@ const ChatListInternal = React.memo((props: {
         if (oldestRenderedId !== null || windowedMessages.length === 0) return;
         setOldestRenderedId(windowedMessages[windowedMessages.length - 1].id);
     }, [windowedMessages, oldestRenderedId]);
-
-    React.useEffect(() => {
-        listReadyRef.current = false;
-        requestedWindowEndRef.current = 0;
-        setOldestRenderedId(null);
-        setOlderBlocked(null);
-    }, [props.sessionId]);
 
     const displayItems = useGroupedMessages(windowedMessages, groupToolCalls, groupingOptions);
     const agentCopyTextByMessageId = React.useMemo(
@@ -748,6 +757,11 @@ const ChatListInternal = React.memo((props: {
     // A page landing, or the window growing, is checked without waiting for a
     // scroll event: a reader parked at the oldest message is holding still.
     React.useEffect(() => {
+        // A cached-window commit is not a new native layout measurement.
+        // Reusing the old near-edge metrics here drains the entire cache in a
+        // synchronous render/effect loop. Android grows cached history only
+        // on layout/scroll or an explicit Load more action.
+        if (Platform.OS === 'android' && windowRef.current.length < messagesRef.current.length) return;
         fillOlder();
     }, [fillOlder, messages, windowedMessages, props.isLoadingOlder, props.hasMoreOlder, props.active, olderBlocked, olderSettled]);
     const retryOlder = useCallback(() => {
@@ -757,10 +771,12 @@ const ChatListInternal = React.memo((props: {
     const loadMoreOlder = useCallback(() => {
         invisibleOlderPagesRef.current = 0;
         setOlderBlocked(null);
+        if (Platform.OS === 'android') fillOlderRef.current();
     }, []);
     const olderStatus = olderBlocked === 'error' && props.hasMoreOlder ? 'error'
         : olderBlocked === 'limit' && props.hasMoreOlder ? 'load-more'
-        : props.isLoadingOlder && windowedMessages.length >= messages.length ? 'loading' : 'idle';
+        : props.isLoadingOlder && windowedMessages.length >= messages.length ? 'loading'
+        : Platform.OS === 'android' && windowedMessages.length < messages.length ? 'load-more' : 'idle';
 
     // FlashList lacks React Native Web FlatList's inverted-wheel correction.
     // Keep the mobile coordinate system, correcting only web chat gestures.

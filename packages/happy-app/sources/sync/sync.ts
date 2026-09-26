@@ -2333,6 +2333,13 @@ class Sync {
         // The loop yields between pages to keep the UI thread responsive
         // and to spread out server load.
         while ((this.olderMessagesPrefetchAttempts.get(sessionId) ?? 0) < MAX_PREFETCH_ATTEMPTS) {
+            // Android navigation keeps previous screens mounted. Stop speculative
+            // history work between pages when the reader leaves or backgrounds
+            // the app; onSessionVisible resumes it using the remaining budget.
+            if (Platform.OS === 'android' && (this.appState !== 'active'
+                || storage.getState().currentViewingSessionId !== sessionId)) {
+                return;
+            }
             const sessionMessages = storage.getState().sessionMessages[sessionId];
             if (!sessionMessages || !sessionMessages.hasMoreOlder) {
                 return;

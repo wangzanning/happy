@@ -3,6 +3,7 @@ import { messagePlanMode } from './messagePlanMode';
 
 const mocks = vi.hoisted(() => ({
     state: { sessions: {}, sessionMessages: {}, currentViewingSessionId: null } as any,
+    platform: 'ios',
     request: vi.fn(),
     applyMessages: vi.fn(),
     applyMessagesLoaded: vi.fn(),
@@ -21,7 +22,7 @@ vi.mock('expo-constants', () => ({ default: {} }));
 vi.mock('expo-device', () => ({}));
 vi.mock('expo-crypto', () => ({ randomUUID: () => 'id' }));
 vi.mock('expo-notifications', () => ({}));
-vi.mock('react-native', () => ({ Platform: { OS: 'ios' }, AppState: { currentState: 'active', addEventListener: vi.fn() } }));
+vi.mock('react-native', () => ({ Platform: { get OS() { return mocks.platform; } }, AppState: { currentState: 'active', addEventListener: vi.fn() } }));
 vi.mock('@/utils/platform', () => ({ isRunningOnMac: () => false }));
 vi.mock('@/sync/apiSocket', () => ({ apiSocket: { request: mocks.request }, getCurrentAppState: () => 'active', getHappyClientId: () => 'test' }));
 vi.mock('@/sync/webTabTitle', () => ({ notifyUnreadMessage: vi.fn() }));
@@ -92,6 +93,7 @@ async function waitForPreload() {
 
 beforeEach(() => {
     vi.resetAllMocks();
+    mocks.platform = 'ios';
     mocks.state = {
         sessions: { a: { id: 'a', permissionMode: 'auto', metadata: {} }, b: { id: 'b', permissionMode: 'auto', metadata: {} } },
         sessionMessages: {}, currentViewingSessionId: null,
@@ -146,6 +148,38 @@ describe('background history budget', () => {
         await engine.fetchMessages('a');
         await vi.runAllTimersAsync();
     }
+
+    it.each(['navigation', 'background'])('pauses Android prefetch after %s and resumes the remaining budget', async (reason) => {
+        mocks.platform = 'android';
+        mocks.state.currentViewingSessionId = 'a';
+        await engine.fetchInitialLatestPage('a', encryption);
+        const pageRequest = mocks.request.getMockImplementation()!;
+        mocks.request.mockImplementation(async (...args: any[]) => {
+            const result = await pageRequest(...args);
+            if (reason === 'navigation') mocks.state.currentViewingSessionId = 'b';
+            else engine.appState = 'background';
+            return result;
+        });
+        const first = engine.prefetchOlderMessagesInBackground('a');
+        await vi.runAllTimersAsync();
+        await first;
+        expect(mocks.request).toHaveBeenCalledTimes(2);
+        expect(engine.olderMessagesPrefetchAttempts.get('a')).toBe(1);
+        // Repeated updates from the hidden chat must not spend any more budget.
+        await engine.prefetchOlderMessagesInBackground('a');
+        expect(mocks.request).toHaveBeenCalledTimes(2);
+        mocks.request.mockImplementation(pageRequest);
+        mocks.state.currentViewingSessionId = 'a';
+        engine.appState = 'active';
+        const resumed = engine.prefetchOlderMessagesInBackground('a');
+        await vi.runAllTimersAsync();
+        await resumed;
+        expect(mocks.request).toHaveBeenCalledTimes(6);
+        expect(engine.sessionOldestSeq.get('a')).toBe(9401);
+        // Older history is still available on explicit scroll-back.
+        await engine.loadOlderMessages('a');
+        expect(engine.sessionOldestSeq.get('a')).toBe(9301);
+    });
 
     it('shares five attempts across visits, reconnects and gap invalidations', async () => {
         await openHistory();

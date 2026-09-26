@@ -53,7 +53,7 @@ function setup(rows: ReturnType<typeof record>[], archived = false) {
         return { ok: true, status: 200, json: async () => ({ messages: matching.slice(0, 100), hasMore: matching.length > 100 }) };
     });
     const Harness = compile(`class Sync { ${methods.join('\n')} }; return Sync;`, {
-        storage, apiSocket: { request }, normalizeRawMessage, SEQ_BACKWARD_INITIAL_SENTINEL: 2147483647,
+        Platform: { OS: 'ios' }, storage, apiSocket: { request }, normalizeRawMessage, SEQ_BACKWARD_INITIAL_SENTINEL: 2147483647,
         log: { log() {} }, setTimeout: (resolve: () => void) => resolve(),
     });
     const sync = new Harness();

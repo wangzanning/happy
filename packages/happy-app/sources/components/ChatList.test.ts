@@ -221,6 +221,56 @@ afterEach(() => {
     vi.mocked(Modal.alert).mockClear();
 });
 
+describe('ChatList Android long turns', () => {
+    it('bounds entry work and does not grow on background pages or unrelated updates', () => {
+        state.platform = 'android';
+        state.session = { id: 'session', metadata: null, thinking: true, agentState: { requests: {} } };
+        const history = Array.from({ length: 10000 }, (_, i) => agentMessage(`a${i}`, 10000 - i));
+        state.messages = [...history, userMessage('opener', 0)];
+        const renderer = renderChat(undefined);
+        expect(messageIds(renderer)).toHaveLength(120);
+        expect(messageIds(renderer)).not.toContain('opener');
+        for (let i = 0; i < 10; i++) {
+            state.messages = [...state.messages, userMessage(`older${i}`, -i - 1)];
+            renderChat(renderer);
+        }
+        expect(messageIds(renderer)).toHaveLength(120);
+        // New live messages must not displace the reader's pinned boundary.
+        state.messages = [agentMessage('live', 10001), ...state.messages];
+        renderChat(renderer);
+        expect(messageIds(renderer)).toHaveLength(121);
+        expect(messageIds(renderer).at(-1)).toBe('a119');
+        // Scrolling near the older edge admits the next bounded window.
+        act(() => {
+            const list = renderer.root.findByType('FlashList');
+            list.props.onLayout({ nativeEvent: { layout: { height: 600 } } });
+            list.props.onContentSizeChange(0, 10000);
+            list.props.onScroll({ nativeEvent: { contentOffset: { y: 9000 }, contentSize: { height: 10000 }, layoutMeasurement: { height: 600 } } });
+        });
+        expect(messageIds(renderer).length).toBeGreaterThan(121);
+        expect(messageIds(renderer).length).toBeLessThanOrEqual(241);
+        expect(sync.loadOlderMessages).not.toHaveBeenCalled();
+        // Even when collapsed/hidden rows do not change layout height, the
+        // explicit pager can reach the original opener without dropping data.
+        for (let i = 0; i < 100 && renderer.root.findAllByType('RoundButton').length; i++) {
+            act(() => renderer.root.findByType('RoundButton').props.onPress());
+        }
+        expect(messageIds(renderer)).toContain('opener');
+        expect(messageIds(renderer)).toContain('older9');
+    }, 30000);
+
+    it('keeps ordinary nearby turn boundaries intact', () => {
+        state.platform = 'android';
+        state.session = { id: 'session', metadata: null, thinking: true, agentState: { requests: {} } };
+        state.messages = [
+            ...Array.from({ length: 75 }, (_, i) => agentMessage(`a${i}`, 100 - i)),
+            userMessage('opener', 1), userMessage('older', 0),
+        ];
+        expect(messageIds(renderChat(undefined))).toContain('opener');
+        expect(messageIds(renderers.at(-1)!)).not.toContain('older');
+    });
+});
+
 describe('ChatList automatic history', () => {
     function history(count: number) {
         return Array.from({ length: count }, (_, index) => {
