@@ -187,6 +187,7 @@ export const ProjectHomeListView = React.memo(({
     const keyExtractor = React.useCallback((row: ProjectHomeRow) => {
         switch (row.type) {
             case 'folder': return row.id;
+            case 'folderMore': return `${row.id}:more`;
             case 'section': return `section-${row.id}`;
             case 'machine': return `machine-${row.machineId ?? 'unknown'}`;
             case 'bot': return `bot-${row.session.id}`;
@@ -202,13 +203,17 @@ export const ProjectHomeListView = React.memo(({
 
     const renderItem = React.useCallback(({ item }: { item: ProjectHomeRow }) => {
         switch (item.type) {
+            case 'folderMore':
+                return <Pressable onPress={() => onToggle(item.id)} accessibilityRole="button" style={{ paddingLeft: 52, paddingVertical: 12 }}>
+                    <Text style={{ color: theme.colors.textSecondary }}>{item.expanded ? t('sidebar.showFewerSessions') : t('sidebar.showMoreSessions', { count: item.hiddenCount })}</Text>
+                </Pressable>;
             case 'folder':
                 return <Pressable onPress={() => onToggle(item.id)} accessibilityRole="button"
-                    accessibilityLabel={`${item.title}, ${item.count}`} accessibilityState={{ expanded: item.expanded }}
+                    accessibilityLabel={`${item.title}, ${item.count}`} accessibilityState={{ expanded: item.recent ? item.expanded : true }}
                     style={({ pressed }) => [{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 14, gap: 10 }, pressed && styles.pressed]}>
-                    <Ionicons name={item.expanded ? 'chevron-down' : 'chevron-forward'} size={16} color={theme.colors.textSecondary} />
+                    <Ionicons name={!item.recent || item.expanded ? 'chevron-down' : 'chevron-forward'} size={16} color={theme.colors.textSecondary} />
                     <Ionicons name={item.recent ? 'time-outline' : 'folder-outline'} size={19} color={theme.colors.textSecondary} />
-                    <Text numberOfLines={1} style={{ flex: 1 }}>{item.title}{item.machineName ? ` · ${item.machineName}` : ''}</Text>
+                    <Text numberOfLines={1} style={{ flex: 1, color: theme.colors.text, fontWeight: '600' }}>{item.title}{item.machineName ? ` · ${item.machineName}` : ''}</Text>
                     <Text style={{ color: theme.colors.textSecondary }}>{item.count}</Text>
                 </Pressable>;
             case 'section':

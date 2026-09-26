@@ -130,6 +130,7 @@ export type ProjectHomeRow =
      */
     | { type: 'archived'; session: SessionRowData }
     | { type: 'projectChat'; projectId: string; session: SessionRowData }
+    | { type: 'folderMore'; id: string; expanded: boolean; hiddenCount: number }
     | { type: 'folder'; id: string; title: string; count: number; expanded: boolean; recent: boolean; machineName?: string };
 
 interface BuildOptions {
@@ -162,36 +163,50 @@ export function isRecentSession(session: SessionRowData): boolean {
         || /\/Documents\/ChatGPT(?:\/|$)/.test(path);
 }
 
-function buildSidebarRows(data: readonly SessionListViewItem[], machines: readonly SessionDisplayMachine[], expanded: Readonly<Record<string, boolean>>, recentLabel: string): ProjectHomeRow[] {
+function buildSidebarRows(data: readonly SessionListViewItem[], machines: readonly SessionDisplayMachine[], expanded: Readonly<Record<string, boolean>>, recentLabel: string, unknownMachineText: string): ProjectHomeRow[] {
     const sessions = new Map<string, SessionRowData>();
+    const projectNames = new Map<string, string>();
     for (const item of data) {
-        if (item.type === 'project') for (const workspace of item.project.workspaces) for (const session of workspace.sessions) sessions.set(session.id, session);
+        if (item.type === 'project') for (const workspace of item.project.workspaces) for (const session of workspace.sessions) {
+            sessions.set(session.id, session);
+            projectNames.set(session.id, item.project.name);
+        }
         if (item.type === 'session') sessions.set(item.session.id, item.session);
         if (item.type === 'bots') for (const session of item.sessions) sessions.set(session.id, session);
     }
-    const folders = new Map<string, { title: string; machineId: string | null; sessions: SessionRowData[] }>();
-    const recent: SessionRowData[] = [];
+    type Folder = { title: string; sessions: SessionRowData[] };
+    const devices = new Map<string | null, { folders: Map<string, Folder>; recent: SessionRowData[] }>();
     for (const session of sessions.values()) {
-        if (isRecentSession(session)) { recent.push(session); continue; }
+        const device = devices.get(session.machineId) ?? { folders: new Map<string, Folder>(), recent: [] };
+        devices.set(session.machineId, device);
+        if (isRecentSession(session)) { device.recent.push(session); continue; }
         const path = session.path ? (isWorktreePath(session.path) ? getRepoPath(session.path) : session.path).replace(/[\\/]$/, '') : '';
         const id = `sidebar:project:${JSON.stringify([session.machineId, session.projectId || path])}`;
-        const folder = folders.get(id) ?? { title: session.projectName || path.split(/[\\/]/).pop() || 'Project', machineId: session.machineId, sessions: [] };
+        const folder = device.folders.get(id) ?? {
+            title: session.projectName?.trim() || projectNames.get(session.id)?.trim() || path.split(/[\\/]/).pop() || 'Project', sessions: [] };
         folder.sessions.push(session);
-        folders.set(id, folder);
+        device.folders.set(id, folder);
     }
     const byActivity = (a: SessionRowData, b: SessionRowData) => b.lastActivityAt - a.lastActivityAt || a.id.localeCompare(b.id);
+    const machineName = (id: string | null) => {
+        const machine = machines.find(m => m.id === id);
+        return machine?.metadata?.displayName || machine?.metadata?.host || id || unknownMachineText;
+    };
     const rows: ProjectHomeRow[] = [];
-    const ordered = [...folders].sort((a, b) => a[1].title.localeCompare(b[1].title) || a[0].localeCompare(b[0]));
-    for (const [id, folder] of ordered) {
-        const duplicateName = ordered.some(([otherId, other]) => otherId !== id && other.title === folder.title);
-        const machine = machines.find(m => m.id === folder.machineId);
-        rows.push({ type: 'folder', id, title: folder.title, count: folder.sessions.length, expanded: !!expanded[id], recent: false,
-            machineName: duplicateName ? machine?.metadata?.displayName || machine?.metadata?.host || folder.machineId || undefined : undefined });
-        if (expanded[id]) for (const session of folder.sessions.sort(byActivity)) rows.push({ type: 'projectChat', projectId: id, session });
-    }
-    if (recent.length) {
-        rows.push({ type: 'folder', id: RECENTS_FOLDER_ID, title: recentLabel, count: recent.length, expanded: !!expanded[RECENTS_FOLDER_ID], recent: true });
-        if (expanded[RECENTS_FOLDER_ID]) for (const session of recent.sort(byActivity)) rows.push({ type: 'projectChat', projectId: RECENTS_FOLDER_ID, session });
+    for (const [machineId, device] of [...devices].sort((a, b) => machineName(a[0]).localeCompare(machineName(b[0])) || String(a[0]).localeCompare(String(b[0])))) {
+        rows.push({ type: 'machine', machineId, machineName: machineName(machineId) });
+        for (const [id, folder] of [...device.folders].sort((a, b) => a[1].title.localeCompare(b[1].title) || a[0].localeCompare(b[0]))) {
+            const all = !!expanded[id];
+            const sorted = folder.sessions.sort(byActivity);
+            rows.push({ type: 'folder', id, title: folder.title, count: sorted.length, expanded: all, recent: false });
+            for (const session of all ? sorted : sorted.slice(0, 3)) rows.push({ type: 'projectChat', projectId: id, session });
+            if (sorted.length > 3) rows.push({ type: 'folderMore', id, expanded: all, hiddenCount: Math.max(0, sorted.length - 3) });
+        }
+        if (device.recent.length) {
+            const id = `${RECENTS_FOLDER_ID}:${JSON.stringify(machineId)}`;
+            rows.push({ type: 'folder', id, title: recentLabel, count: device.recent.length, expanded: !!expanded[id], recent: true });
+            if (expanded[id]) for (const session of device.recent.sort(byActivity)) rows.push({ type: 'projectChat', projectId: id, session });
+        }
     }
     return rows;
 }
@@ -413,7 +428,7 @@ export function buildProjectHomeRows({
     hasArchivedSessions = false,
     archiveHidden = true,
 }: BuildOptions): ProjectHomeRow[] {
-    if (showSessions) return buildSidebarRows(data, machines, expanded, labels.recent ?? 'Recents');
+    if (showSessions) return buildSidebarRows(data, machines, expanded, labels.recent ?? 'Recents', unknownMachineText);
     const rows: ProjectHomeRow[] = [];
     const machinesById = new Map(machines.map((machine) => [machine.id, machine]));
     const sections = new Map<string | null, MachineSection>();

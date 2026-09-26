@@ -562,6 +562,9 @@ export const zhHant: TranslationStructure = {
     },
 
     sidebar: {
+        showMoreSessions: ({ count }: { count: number }) => `显示更多（${count}）`,
+        showFewerSessions: '收起为最近 3 个',
+
         recent: "最近",
         sessionsTitle: 'Happy',
         showArchived: '顯示已封存',

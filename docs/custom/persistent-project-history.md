@@ -24,3 +24,10 @@ Project mode now renders one collapsible folder per project, followed by a separ
 Project identity uses explicit session project metadata when present, otherwise machine + working-directory/repository path. Missing paths, home/root/tmp paths, and generated Documents/Codex/date or Documents/ChatGPT task directories go into Recents unless an explicit project identity overrides that inference. This is a mobile-side grouping rule, not a complete import of the Codex desktop saved-project registry.
 
 Only an actual user scroll can trigger another catalog page automatically; collapsing folders or initially mounting a short list cannot drain all history pages. The load-more/retry footer remains available when collapsed folders do not fill the viewport. Folder counts reflect loaded metadata, not server-wide totals.
+
+
+## Device-first previews (Android build 3)
+
+The outer level again groups by device. Each device owns its project folders and its own collapsible Recents folder. Projects show their three most recently active loaded chats by default; Show more reveals the remaining loaded chats, and Show latest 3 restores the preview. Expansion remains local. Project names prefer the supplied project/group name with directory-name fallback, and explicitly use theme text color for dark-mode readability. The 40-record catalog pager and metadata-only loading are unchanged.
+
+Validation: 35 project-list tests pass, including per-device separation, retained project names, default three-chat ordering, expansion, and device-scoped Recents. App typecheck passes. Build 3 uses the same test signing identity and package name with versionCode 3.

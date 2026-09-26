@@ -596,6 +596,9 @@ export const en = {
     },
 
     sidebar: {
+        showMoreSessions: ({ count }: { count: number }) => `Show more (${count})`,
+        showFewerSessions: 'Show latest 3',
+
         recent: "Recents",
         sessionsTitle: 'Happy',
         showArchived: 'Show archived',

@@ -578,6 +578,9 @@ export const pl: TranslationStructure = {
     },
 
     sidebar: {
+        showMoreSessions: ({ count }: { count: number }) => `Show more (${count})`,
+        showFewerSessions: 'Show latest 3',
+
         recent: "Recents",
         sessionsTitle: 'Happy',
         showArchived: 'Pokaż zarchiwizowane',

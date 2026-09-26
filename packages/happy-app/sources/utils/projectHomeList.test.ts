@@ -94,6 +94,7 @@ function shape(rows: ReturnType<typeof build>): string[] {
                 : `toggle:+${item.toggle.hiddenCount}`;
             case 'archiveToggle': return item.hidden ? 'archive:show' : 'archive:hide';
             case 'archiveHeader': return `archiveHeader:${item.title}`;
+            case 'folderMore': return `more:${item.id}`;
             case 'folder': return `folder:${item.title}`;
             case 'projectChat': return `chat:${item.session.id}`;
             case 'archived': return `archived:${item.session.id}`;
@@ -528,7 +529,7 @@ describe('persistent project chats', () => {
 });
 
  describe('project sidebar folders', () => {
-    it('collapses projects and Recents independently, without machine/source sections', () => {
+    it('shows project previews below their device and keeps Recents independently collapsed', () => {
         const data = [project('repo', 'happy', [{ id: '', name: null, sessions: [
             row({ id: 'project', path: '/work/repo' }),
             row({ id: 'scratch', path: '/Users/me/Documents/Codex/2026-09-27/chat' }),
@@ -536,10 +537,10 @@ describe('persistent project chats', () => {
         ] }])];
         const options = { data, machines: [], unknownMachineText: '?', expanded: {}, labels: { bots: 'Bots', projects: 'Projects', recent: '最近' }, showSessions: true };
         const closed = buildProjectHomeRows(options);
-        expect(closed.map(r => r.type)).toEqual(['folder', 'folder']);
-        expect(closed[1]).toMatchObject({ title: '最近', count: 2, expanded: false });
-        const open = buildProjectHomeRows({ ...options, expanded: { 'sidebar:recents': true } });
-        expect(open.filter(r => r.type === 'projectChat').map(r => r.session.id)).toEqual(['home', 'scratch']);
+        expect(closed.map(r => r.type)).toEqual(['machine', 'folder', 'projectChat', 'folder']);
+        expect(closed[3]).toMatchObject({ title: '最近', count: 2, expanded: false });
+        const open = buildProjectHomeRows({ ...options, expanded: { 'sidebar:recents:"machine-a"': true } });
+        expect(open.filter(r => r.type === 'projectChat').map(r => r.session.id)).toEqual(['project', 'home', 'scratch']);
     });
     it('honors explicit project identity even in a generated directory and distinguishes machines', () => {
         const data = [project('saved', 'rig', [{ id: '', name: null, sessions: [
@@ -547,7 +548,22 @@ describe('persistent project chats', () => {
             row({ id: 'b', path: '/Users/me/Documents/ChatGPT/chat', projectId: 'saved', projectName: 'Saved', machineId: 'other' }),
         ] }])];
         const rows = buildProjectHomeRows({ data, machines: [], unknownMachineText: '?', expanded: {}, labels: { bots: 'Bots', projects: 'Projects' }, showSessions: true });
-        expect(rows).toHaveLength(2);
-        expect(rows.every(r => r.type === 'folder' && !r.recent)).toBe(true);
+        expect(rows.filter(r => r.type === 'machine')).toHaveLength(2);
+        expect(rows.filter(r => r.type === 'folder')).toHaveLength(2);
+        expect(rows.filter(r => r.type === 'projectChat')).toHaveLength(2);
     });
 });
+
+ it('shows the latest three per project by default, restores project names, and expands without mixing devices', () => {
+    const chats = Array.from({ length: 7 }, (_, i) => row({ id: `a${i}`, path: '/work/raw-dir', lastActivityAt: i }));
+    const data = [project('Readable Project', 'happy', [{ id: '', name: null, sessions: chats }]),
+        project('Other Device', 'happy', [{ id: '', name: null, sessions: [row({ id: 'b', path: '/work/raw-dir', machineId: 'machine-b' })] }], 'machine-b')];
+    const options = { data, machines, unknownMachineText: '?', expanded: {}, labels: { bots: 'Bots', projects: 'Projects' }, showSessions: true };
+    const rows = buildProjectHomeRows(options);
+    expect(rows.filter(r => r.type === 'folder').map(r => r.title)).toEqual(['Other Device', 'Readable Project']);
+    expect(rows.filter(r => r.type === 'projectChat').map(r => r.session.id)).toEqual(['b', 'a6', 'a5', 'a4']);
+    expect(rows.find(r => r.type === 'folderMore')).toMatchObject({ hiddenCount: 4, expanded: false });
+    const all = buildProjectHomeRows({ ...options, expanded: { 'sidebar:project:["machine-a","/work/raw-dir"]': true } });
+    expect(all.filter(r => r.type === 'projectChat')).toHaveLength(8);
+    expect(all.find(r => r.type === 'folderMore')).toMatchObject({ expanded: true });
+ });
