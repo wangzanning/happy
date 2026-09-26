@@ -138,6 +138,22 @@ describe('CodexAppServerClient sandbox integration', () => {
         expect(new CodexAppServerClient().supportsGoalActions()).toBe(false);
     });
 
+    it('confirms actual child exit before completing desktop handoff', async () => {
+        const { CodexAppServerClient } = await import('./codexAppServerClient');
+        const proc = createMockProcess();
+        mockSpawn.mockReturnValue(proc);
+        const client = new CodexAppServerClient();
+        await client.connect();
+        let released = false;
+        const pending = client.disconnectAndWait().then(() => { released = true; });
+        await Promise.resolve();
+        expect(proc.kill).toHaveBeenCalledWith('SIGTERM');
+        expect(released).toBe(false);
+        proc.emit('exit', 0, null);
+        await pending;
+        expect(released).toBe(true);
+    });
+
     it('wraps transport when sandbox is enabled', async () => {
         // Dynamic import to ensure mocks are applied
         const { CodexAppServerClient } = await import('./codexAppServerClient');
