@@ -96,3 +96,12 @@ describe('archiving a chat before the machine has answered', () => {
         expect(archived()).toEqual(['a']);
     });
 });
+
+ it('keeps a disconnected CLI session unarchived and allows an explicit later archive', () => {
+    const meta = metadata({ client: undefined, flavor: 'codex', lifecycleState: 'disconnected', desktopReleaseRequestId: 'current', path: '/repo' });
+    storage.getState().applySessions([session('disconnected', { active: false, metadata: meta })]);
+    expect(live()).toContain('disconnected');
+    expect(archived()).not.toContain('disconnected');
+    storage.getState().markArchiving('disconnected');
+    expect(archived()).toContain('disconnected');
+});

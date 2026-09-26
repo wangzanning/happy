@@ -1,3 +1,4 @@
+import { finalizeCodexSession } from './utils/finalizeCodexSession';
 import { render } from "ink";
 import React from "react";
 import { ApiClient } from '@/api/api';
@@ -471,6 +472,7 @@ export async function runCodex(opts: {
      * Abort stops the current inference but keeps the session alive.
      * Kill terminates the entire process.
      */
+    let releaseRequestId: string | undefined;
     let terminationPromise: Promise<void> | null = null;
     const handleKillSession = (): Promise<void> => {
         if (terminationPromise) return terminationPromise;
@@ -486,24 +488,7 @@ export async function runCodex(opts: {
             await handleAbort();
             logger.debug('[Codex] Abort completed, proceeding with termination');
 
-            // Release the native writer before publishing death/archive. A mobile
-            // kill RPC only acknowledges the request, not completion of shutdown.
-            await client.disconnectAndWait();
-            // Update lifecycle state to archived before closing
-            if (session) {
-                session.updateMetadata((currentMetadata) => ({
-                    ...currentMetadata,
-                    lifecycleState: 'archived',
-                    lifecycleStateSince: Date.now(),
-                    archivedBy: 'cli',
-                    archiveReason: 'Codex writer released'
-                }));
-                
-                // Send session death message
-                session.sendSessionDeath();
-                await session.flush();
-                await session.close();
-            }
+            await finalizeCodexSession(client, session, releaseRequestId);
 
             // Stop Happy MCP server
             happyServer.stop();
@@ -519,6 +504,15 @@ export async function runCodex(opts: {
     // Register abort handler
     session.rpcHandlerManager.registerHandler('abort', handleAbort);
 
+    session.rpcHandlerManager.registerHandler<{ requestId: string }>('releaseToDesktop', async (request) => {
+        if (!request?.requestId || typeof request.requestId !== 'string' || request.requestId.length > 128) {
+            return { success: false, message: 'Invalid release request' };
+        }
+        if (terminationPromise) return { success: false, message: 'Session is already stopping' };
+        releaseRequestId = request.requestId;
+        void handleKillSession();
+        return { success: true };
+    });
     registerKillSessionHandler(session.rpcHandlerManager, handleKillSession);
 
     //

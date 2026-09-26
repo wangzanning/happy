@@ -123,7 +123,7 @@ export const ProjectHomeList = React.memo((props: ProjectHomeListLayout) => {
         machines,
         unknownMachineText: t('status.unknown'),
         expanded,
-        labels: { bots: t('sidebar.bots'), projects: t('sidebar.projects') },
+        labels: { bots: t('sidebar.bots'), projects: t('sidebar.projects'), recent: t('sidebar.recent') },
         hasArchivedSessions,
         archiveHidden,
     }), [archiveHidden, expanded, data, hasArchivedSessions, machines]);
@@ -182,8 +182,11 @@ export const ProjectHomeListView = React.memo(({
     const { theme } = useUnistyles();
     const safeArea = useSafeAreaInsets();
 
+    const userScrolled = React.useRef(false);
+
     const keyExtractor = React.useCallback((row: ProjectHomeRow) => {
         switch (row.type) {
+            case 'folder': return row.id;
             case 'section': return `section-${row.id}`;
             case 'machine': return `machine-${row.machineId ?? 'unknown'}`;
             case 'bot': return `bot-${row.session.id}`;
@@ -199,6 +202,15 @@ export const ProjectHomeListView = React.memo(({
 
     const renderItem = React.useCallback(({ item }: { item: ProjectHomeRow }) => {
         switch (item.type) {
+            case 'folder':
+                return <Pressable onPress={() => onToggle(item.id)} accessibilityRole="button"
+                    accessibilityLabel={`${item.title}, ${item.count}`} accessibilityState={{ expanded: item.expanded }}
+                    style={({ pressed }) => [{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 14, gap: 10 }, pressed && styles.pressed]}>
+                    <Ionicons name={item.expanded ? 'chevron-down' : 'chevron-forward'} size={16} color={theme.colors.textSecondary} />
+                    <Ionicons name={item.recent ? 'time-outline' : 'folder-outline'} size={19} color={theme.colors.textSecondary} />
+                    <Text numberOfLines={1} style={{ flex: 1 }}>{item.title}{item.machineName ? ` · ${item.machineName}` : ''}</Text>
+                    <Text style={{ color: theme.colors.textSecondary }}>{item.count}</Text>
+                </Pressable>;
             case 'section':
                 return (
                     <View style={styles.section}>
@@ -245,7 +257,7 @@ export const ProjectHomeListView = React.memo(({
                     </View>
                 );
             case 'projectChat':
-                return <ChatRow session={item.session} archived={item.session.archived} />;
+                return <View style={{ paddingLeft: 26 }}><ChatRow session={item.session} archived={item.session.archived} /></View>;
             case 'archived':
                 return <ChatRow session={item.session} archived />;
         }
@@ -263,7 +275,8 @@ export const ProjectHomeListView = React.memo(({
             <View style={styles.contentContainer}>
                 <FlatList
                     data={rows}
-                    onEndReached={() => { if (catalog?.hasMore && !catalog.loading && !catalog.error) loadMore?.(); }}
+                    onScrollBeginDrag={() => { userScrolled.current = true; }}
+                    onEndReached={() => { if (userScrolled.current && catalog?.hasMore && !catalog.loading && !catalog.error) { userScrolled.current = false; loadMore?.(); } }}
                     onEndReachedThreshold={0.5}
                     ListFooterComponent={catalog?.loading ? <ActivityIndicator /> : catalog?.hasMore ? (
                         <Pressable onPress={loadMore} accessibilityRole="button" style={{ padding: 20 }}>

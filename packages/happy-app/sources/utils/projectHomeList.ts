@@ -129,7 +129,8 @@ export type ProjectHomeRow =
      * its worktree is frequently no longer on disk.
      */
     | { type: 'archived'; session: SessionRowData }
-    | { type: 'projectChat'; projectId: string; session: SessionRowData };
+    | { type: 'projectChat'; projectId: string; session: SessionRowData }
+    | { type: 'folder'; id: string; title: string; count: number; expanded: boolean; recent: boolean; machineName?: string };
 
 interface BuildOptions {
     showSessions?: boolean;
@@ -138,7 +139,7 @@ interface BuildOptions {
     unknownMachineText: string;
     /** Which projects are showing every worktree, keyed by project id. */
     expanded: Readonly<Record<string, boolean>>;
-    labels: { bots: string; projects: string };
+    labels: { bots: string; projects: string; recent?: string };
     /**
      * Whether the account has anything archived at all, which is what decides
      * if the toggle is drawn. `data` cannot say: while the archive is hidden it
@@ -147,6 +148,52 @@ interface BuildOptions {
     hasArchivedSessions?: boolean;
     /** The archive-visibility setting, as the toggle should report it. */
     archiveHidden?: boolean;
+}
+
+export const RECENTS_FOLDER_ID = 'sidebar:recents';
+
+/** Explicit project identity wins; generated projectless task directories do not create projects. */
+export function isRecentSession(session: SessionRowData): boolean {
+    if (session.projectId) return false;
+    const path = (session.path ?? '').replace(/\\/g, '/').replace(/\/$/, '');
+    const home = (session.homeDir ?? '').replace(/\\/g, '/').replace(/\/$/, '');
+    return !path || path === '/' || path === home || path === '/tmp' || path.startsWith('/tmp/')
+        || /\/Documents\/Codex\/\d{4}-\d{2}-\d{2}(?:\/|$)/.test(path)
+        || /\/Documents\/ChatGPT(?:\/|$)/.test(path);
+}
+
+function buildSidebarRows(data: readonly SessionListViewItem[], machines: readonly SessionDisplayMachine[], expanded: Readonly<Record<string, boolean>>, recentLabel: string): ProjectHomeRow[] {
+    const sessions = new Map<string, SessionRowData>();
+    for (const item of data) {
+        if (item.type === 'project') for (const workspace of item.project.workspaces) for (const session of workspace.sessions) sessions.set(session.id, session);
+        if (item.type === 'session') sessions.set(item.session.id, item.session);
+        if (item.type === 'bots') for (const session of item.sessions) sessions.set(session.id, session);
+    }
+    const folders = new Map<string, { title: string; machineId: string | null; sessions: SessionRowData[] }>();
+    const recent: SessionRowData[] = [];
+    for (const session of sessions.values()) {
+        if (isRecentSession(session)) { recent.push(session); continue; }
+        const path = session.path ? (isWorktreePath(session.path) ? getRepoPath(session.path) : session.path).replace(/[\\/]$/, '') : '';
+        const id = `sidebar:project:${JSON.stringify([session.machineId, session.projectId || path])}`;
+        const folder = folders.get(id) ?? { title: session.projectName || path.split(/[\\/]/).pop() || 'Project', machineId: session.machineId, sessions: [] };
+        folder.sessions.push(session);
+        folders.set(id, folder);
+    }
+    const byActivity = (a: SessionRowData, b: SessionRowData) => b.lastActivityAt - a.lastActivityAt || a.id.localeCompare(b.id);
+    const rows: ProjectHomeRow[] = [];
+    const ordered = [...folders].sort((a, b) => a[1].title.localeCompare(b[1].title) || a[0].localeCompare(b[0]));
+    for (const [id, folder] of ordered) {
+        const duplicateName = ordered.some(([otherId, other]) => otherId !== id && other.title === folder.title);
+        const machine = machines.find(m => m.id === folder.machineId);
+        rows.push({ type: 'folder', id, title: folder.title, count: folder.sessions.length, expanded: !!expanded[id], recent: false,
+            machineName: duplicateName ? machine?.metadata?.displayName || machine?.metadata?.host || folder.machineId || undefined : undefined });
+        if (expanded[id]) for (const session of folder.sessions.sort(byActivity)) rows.push({ type: 'projectChat', projectId: id, session });
+    }
+    if (recent.length) {
+        rows.push({ type: 'folder', id: RECENTS_FOLDER_ID, title: recentLabel, count: recent.length, expanded: !!expanded[RECENTS_FOLDER_ID], recent: true });
+        if (expanded[RECENTS_FOLDER_ID]) for (const session of recent.sort(byActivity)) rows.push({ type: 'projectChat', projectId: RECENTS_FOLDER_ID, session });
+    }
+    return rows;
 }
 
 /** Checkouts are addressed through their project, which owns their names. */
@@ -366,6 +413,7 @@ export function buildProjectHomeRows({
     hasArchivedSessions = false,
     archiveHidden = true,
 }: BuildOptions): ProjectHomeRow[] {
+    if (showSessions) return buildSidebarRows(data, machines, expanded, labels.recent ?? 'Recents');
     const rows: ProjectHomeRow[] = [];
     const machinesById = new Map(machines.map((machine) => [machine.id, machine]));
     const sections = new Map<string | null, MachineSection>();

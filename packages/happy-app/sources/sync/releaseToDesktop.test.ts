@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({ kill: vi.fn(), sessions: {} as Record<string, any> }));
-vi.mock('./ops', () => ({ sessionKill: mocks.kill }));
+vi.mock('./apiSocket', () => ({ apiSocket: { sessionRPC: mocks.kill } }));
+vi.mock('expo-crypto', () => ({ randomUUID: () => 'fresh-release-id' }));
 vi.mock('./storage', () => ({ storage: { getState: () => ({ sessions: mocks.sessions }) } }));
 import { releaseToDesktop } from './releaseToDesktop';
 
@@ -23,11 +24,15 @@ describe('release to desktop', () => {
         mocks.sessions.a.metadata.lifecycleState = 'archived';
         await vi.advanceTimersByTimeAsync(250);
         expect(completed).toBe(false); // Legacy CLI archives before its child exits.
-        mocks.sessions.a.metadata.archiveReason = 'Codex writer released';
+        mocks.sessions.a.metadata.lifecycleState = 'disconnected';
+        mocks.sessions.a.metadata.desktopReleaseRequestId = 'old-release-id';
+        await vi.advanceTimersByTimeAsync(250);
+        expect(completed).toBe(false);
+        mocks.sessions.a.metadata.desktopReleaseRequestId = 'fresh-release-id';
         await vi.advanceTimersByTimeAsync(250);
         await pending;
         expect(completed).toBe(true);
-        expect(mocks.kill).toHaveBeenCalledWith('a');
+        expect(mocks.kill).toHaveBeenCalledWith('a', 'releaseToDesktop', { requestId: 'fresh-release-id' });
     });
     it('reports RPC failure without pretending a server archive released the writer', async () => {
         mocks.kill.mockResolvedValue({ success: false, message: 'Machine offline' });
