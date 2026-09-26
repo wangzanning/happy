@@ -471,12 +471,24 @@ export async function runCodex(opts: {
      * Abort stops the current inference but keeps the session alive.
      * Kill terminates the entire process.
      */
-    const handleKillSession = async () => {
+    let terminationPromise: Promise<void> | null = null;
+    const handleKillSession = (): Promise<void> => {
+        if (terminationPromise) return terminationPromise;
+        shouldExit = true;
+        clearInterval(keepAliveInterval);
+        // Defer execution so the main loop's finally can always see the guard.
+        terminationPromise = Promise.resolve().then(terminateSession);
+        return terminationPromise;
+    };
+    const terminateSession = async () => {
         logger.debug('[Codex] Kill session requested - terminating process');
-        await handleAbort();
-        logger.debug('[Codex] Abort completed, proceeding with termination');
-
         try {
+            await handleAbort();
+            logger.debug('[Codex] Abort completed, proceeding with termination');
+
+            // Release the native writer before publishing death/archive. A mobile
+            // kill RPC only acknowledges the request, not completion of shutdown.
+            await client.disconnectAndWait();
             // Update lifecycle state to archived before closing
             if (session) {
                 session.updateMetadata((currentMetadata) => ({
@@ -484,20 +496,13 @@ export async function runCodex(opts: {
                     lifecycleState: 'archived',
                     lifecycleStateSince: Date.now(),
                     archivedBy: 'cli',
-                    archiveReason: 'User terminated'
+                    archiveReason: 'Codex writer released'
                 }));
                 
                 // Send session death message
                 session.sendSessionDeath();
                 await session.flush();
                 await session.close();
-            }
-
-            // Force close Codex transport (best-effort) so we don't leave stray processes
-            try {
-                await client.disconnect();
-            } catch (e) {
-                logger.debug('[Codex] Error disconnecting Codex during termination', e);
             }
 
             // Stop Happy MCP server
@@ -897,6 +902,8 @@ export async function runCodex(opts: {
                 message = batch;
             }
 
+            if (shouldExit) break;
+
             // Defensive check for TS narrowing
             if (!message) {
                 break;
@@ -1039,6 +1046,9 @@ export async function runCodex(opts: {
         }
 
     } finally {
+        // Explicit termination owns shutdown. Do not race it by closing the
+        // session socket before the native writer has actually exited.
+        if (terminationPromise) await terminationPromise;
         // Clean up resources when main loop exits
         logger.debug('[codex]: Final cleanup start');
         logActiveHandles('cleanup-start');

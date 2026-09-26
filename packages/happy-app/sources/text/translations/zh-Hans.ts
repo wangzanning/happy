@@ -368,6 +368,12 @@ export const zhHans: TranslationStructure = {
     },
 
     sessionInfo: {
+        releaseDesktop: "断开并交还桌面端",
+        releaseDesktopSubtitle: "停止 Happy 的 Codex 进程，让桌面端接手原会话",
+        releaseDesktopWarning: "这会停止正在执行的任务，并归档此 Happy 会话。聊天历史和项目文件会保留。断开完成后，请在 Mac 桌面端继续原会话。",
+        releaseDesktopDone: "会话已停止，可以在桌面端继续原会话。Happy 中的历史保留在归档会话内。",
+        releaseDesktopFailed: "尚未确认断开成功。此功能需要 Mac 配套的定制 Happy CLI。请检查版本及连接后重试，目前不能确认桌面端占用已释放。",
+
         // Used by Session Info screen (app/(app)/session/[id]/info.tsx)
         killSession: '终止会话',
         killSessionConfirm: '您确定要终止此会话吗？',

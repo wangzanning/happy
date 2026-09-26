@@ -101,6 +101,9 @@ function SessionInfoContent({ session }: { session: Session }) {
         openDuplicateSheet,
         resumeSession,
         resumeSessionSubtitle,
+        canReleaseToDesktop,
+        releasingSession,
+        releaseSession,
     } = useSessionQuickActions(session);
 
     // Asked now rather than after the archive, which is what takes the chat out
@@ -225,6 +228,15 @@ function SessionInfoContent({ session }: { session: Session }) {
             >
                 {/* Quick Actions — changes are the first entry, above metadata. */}
                 <ItemGroup title={t('sessionInfo.quickActions')}>
+                    {canReleaseToDesktop && (
+                        <Item
+                            title={t('sessionInfo.releaseDesktop')}
+                            subtitle={t('sessionInfo.releaseDesktopSubtitle')}
+                            icon={<Ionicons name="desktop-outline" size={29} color="#007AFF" />}
+                            onPress={releaseSession}
+                            disabled={releasingSession}
+                        />
+                    )}
                     <Item
                         title={t('files.changes')}
                         icon={<Octicons name="file-diff" size={26} color="#007AFF" />}

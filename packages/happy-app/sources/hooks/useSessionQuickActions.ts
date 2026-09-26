@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { releaseToDesktop } from '@/sync/releaseToDesktop';
 import { useHappyAction } from '@/hooks/useHappyAction';
 import { useNavigateToSession } from '@/hooks/useNavigateToSession';
 import { Modal } from '@/modal';
@@ -292,6 +293,24 @@ export function useSessionQuickActions(
         }
     });
 
+    const canReleaseToDesktop = session.metadata?.flavor === 'codex'
+        && !session.metadata?.bot && (session.active || sessionStatus.isConnected);
+    const [releasingSession, performRelease] = useHappyAction(async () => {
+        try {
+            await releaseToDesktop(session.id);
+        } catch (error) {
+            throw new HappyError(t('sessionInfo.releaseDesktopFailed') + '\n' + (error instanceof Error ? error.message : ''), false);
+        }
+        Modal.alert(t('common.success'), t('sessionInfo.releaseDesktopDone'));
+    });
+    const releaseSession = React.useCallback(() => {
+        if (releasingSession) return;
+        Modal.alert(t('sessionInfo.releaseDesktop'), t('sessionInfo.releaseDesktopWarning'), [
+            { text: t('common.cancel'), style: 'cancel' },
+            { text: t('sessionInfo.releaseDesktop'), style: 'destructive', onPress: performRelease },
+        ]);
+    }, [releasingSession, performRelease]);
+
     const archiveSession = React.useCallback(() => {
         performArchive();
     }, [performArchive]);
@@ -340,6 +359,10 @@ export function useSessionQuickActions(
             items.push({ id: 'resume', icon: 'play-circle-outline', label: t('sessionInfo.resumeSession'), onPress: resumeSession });
         }
 
+        if (canReleaseToDesktop) {
+            items.push({ id: 'release-desktop', icon: 'desktop-outline', label: t('sessionInfo.releaseDesktop'), onPress: releaseSession });
+        }
+
         if (canFork) {
             items.push({ id: 'fork', icon: 'git-branch-outline', label: t('session.forkAction'), onPress: forkSession });
             items.push({ id: 'duplicate', icon: 'time-outline', label: t('session.duplicateAction'), onPress: openDuplicateSheet });
@@ -354,6 +377,8 @@ export function useSessionQuickActions(
 
         return items;
     }, [
+        canReleaseToDesktop,
+        releaseSession,
         archiveSession,
         canCopySessionMetadata,
         canFork,
@@ -396,6 +421,9 @@ export function useSessionQuickActions(
         resumeSession,
         resumeSessionSubtitle: resumeAvailability.subtitle,
         resumingSession,
+        canReleaseToDesktop,
+        releasingSession,
+        releaseSession,
     };
 }
 

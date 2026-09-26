@@ -14,6 +14,7 @@
  */
 
 import { execSync, type ChildProcess } from 'node:child_process';
+import { waitForProcessExit } from './waitForProcessExit';
 import { spawn as crossSpawn } from 'cross-spawn';
 import { createInterface, type Interface as ReadlineInterface } from 'node:readline';
 import { logger } from '@/ui/logger';
@@ -758,6 +759,11 @@ export class CodexAppServerClient {
         this.sandboxEnabled = false;
 
         logger.debug('[CodexAppServer] Disconnected');
+    }
+
+    async disconnectAndWait(): Promise<void> {
+        const exited = this.process ? waitForProcessExit(this.process) : Promise.resolve();
+        await Promise.all([exited, this.disconnectInternal()]);
     }
 
     async disconnect(): Promise<void> {
