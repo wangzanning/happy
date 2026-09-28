@@ -226,7 +226,7 @@ export default function AppearanceSettingsScreen() {
     const [preferredLanguage] = useSettingMutable('preferredLanguage');
     const [avatarStyleSetting, setAvatarStyle] = useSettingMutable('avatarStyle');
     const [avatarMonochrome, setAvatarMonochrome] = useSettingMutable('avatarMonochrome');
-    const [sessionListGrouping, setSessionListGrouping] = useSettingMutable('sessionListGrouping');
+    const [sessionListGrouping, setSessionListGrouping] = useLocalSettingMutable('sessionListGrouping');
     const [agentInputEnterToSend, setAgentInputEnterToSend] = useSettingMutable('agentInputEnterToSend');
     const [commandPaletteEnabled, setCommandPaletteEnabled] = useLocalSettingMutable('commandPaletteEnabled');
     const [fileDiffsSidebar, setFileDiffsSidebar] = useSettingMutable('fileDiffsSidebar');

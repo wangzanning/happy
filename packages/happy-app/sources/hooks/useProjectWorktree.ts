@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { useShallow } from 'zustand/react/shallow';
-import { storage, useSetting } from '@/sync/storage';
+import { storage, useLocalSetting } from '@/sync/storage';
 import { usePendingChatRecords } from '@/sync/pendingChats';
 import { locateProjectWorkspace, tabOrder } from '@/utils/projectHomeList';
 import { neighbouringTabId, resolveWorktreeTabs } from '@/utils/worktreeTabs';
@@ -25,7 +25,7 @@ const NONE = { found: false, projectName: '', workspaceName: null, tabCount: 0 }
  * checkout's name or tab count actually changes.
  */
 export function useProjectWorktreeSummary(sessionId: string): ProjectWorktreeSummary | null {
-    const enabled = useSetting('sessionListGrouping') === 'project';
+    const enabled = useLocalSetting('sessionListGrouping') === 'project';
     // A chat being opened is a tab the strip already draws, and a chat whose
     // session has just arrived is only one tab even while it is briefly both.
     // The count is resolved the same way the strip is, or the header contradicts
@@ -72,7 +72,7 @@ export function useProjectWorktreeSummary(sessionId: string): ProjectWorktreeSum
  * and asking afterwards finds nothing left to be a neighbour of.
  */
 export function useWorktreeTabSuccessor(sessionId: string): string | null {
-    const enabled = useSetting('sessionListGrouping') === 'project';
+    const enabled = useLocalSetting('sessionListGrouping') === 'project';
     return storage((state) => {
         if (!enabled) return null;
         const found = locateProjectWorkspace(state.sessionListViewData, sessionId);

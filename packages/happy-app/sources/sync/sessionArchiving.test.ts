@@ -105,3 +105,17 @@ describe('archiving a chat before the machine has answered', () => {
     storage.getState().markArchiving('disconnected');
     expect(archived()).toContain('disconnected');
 });
+
+ it('keeps an offline legacy CLI session in its project across repeated presence updates', () => {
+    const meta = metadata({ client: undefined, flavor: 'codex', path: '/repo' });
+    storage.getState().applySessions([session('legacy', { metadata: meta })]);
+    for (const active of [false, true, false]) {
+        storage.getState().applySessions([session('legacy', { active, metadata: meta })]);
+        expect(live()).toContain('legacy');
+        expect(archived()).not.toContain('legacy');
+    }
+    storage.getState().applySessions([session('legacy', {
+        active: false, metadata: { ...meta, lifecycleState: 'archived' },
+    })]);
+    expect(archived()).toContain('legacy');
+});

@@ -110,7 +110,7 @@ export const ProjectHomeList = React.memo((props: ProjectHomeListLayout) => {
     const data = usePersistentProjectListViewData();
     const catalog = React.useSyncExternalStore(sync.sessionCatalog.subscribe, sync.sessionCatalog.getSnapshot);
     const loadMore = React.useCallback(() => { void sync.sessionCatalog.loadMore().catch(() => {}); }, []);
-    const machines = useAllMachines();
+    const machines = useAllMachines({ includeOffline: true });
     const expanded = useLocalSetting('expandedProjects');
     const hasArchivedSessions = (data ?? []).some(item => item.type === 'session' && item.session.archived);
     // Stored under its original `hideInactiveSessions` key — synced settings

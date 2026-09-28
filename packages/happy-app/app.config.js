@@ -117,7 +117,7 @@ export default {
                 "android.permission.READ_MEDIA_VIDEO",
             ],
             package: bundleId,
-            ...(isCustom ? { versionCode: 3 } : {}),
+            ...(isCustom ? { versionCode: 4 } : {}),
             ...(isCustom ? {} : { googleServicesFile: "./google-services.json" }),
             intentFilters: variant === 'production' ? [
                 {

@@ -22,6 +22,7 @@ export const LocalSettingsSchema = z.object({
     // CLI version acknowledgments - keyed by machineId
     acknowledgedCliVersions: z.record(z.string(), z.string()).describe('Acknowledged CLI versions per machine'),
     // Projects showing every workspace rather than the first few - keyed by project id
+    sessionListGrouping: z.enum(['flat', 'project']).describe('Device-local home list layout, independent of synced legacy preferences'),
     expandedProjects: z.record(z.string(), z.boolean()).describe('Projects showing all workspaces instead of the first few'),
     // Boxes ticked on the "Link your computer" checklist - keyed by step id
     linkComputerChecklist: z.record(z.string(), z.boolean()).describe('Ticked steps on the link-your-computer checklist'),
@@ -53,6 +54,7 @@ export const localSettingsDefaults: LocalSettings = {
     sidebarPanelsOpen: [],
     sidebarPanelActive: null,
     acknowledgedCliVersions: {},
+    sessionListGrouping: 'project',
     expandedProjects: {},
     linkComputerChecklist: {},
 };

@@ -7,7 +7,7 @@ import { SessionsList } from './SessionsList';
 import { EmptyMainScreen } from './EmptyMainScreen';
 import { ProjectHomeList } from './ProjectHomeList';
 import { useHasArchivedSessions, useVisibleSessionListViewData } from '@/hooks/useVisibleSessionListViewData';
-import { useAllMachines, useSetting, useSettingMutable } from '@/sync/storage';
+import { useAllMachines, useLocalSetting, useSettingMutable } from '@/sync/storage';
 import { collectMachineChoices } from '@/sync/machineChoices';
 import { LinkComputerChecklist } from './onboarding/LinkComputer';
 import { resolveHomeEmptyState } from './onboarding/firstRunOnboarding';
@@ -62,8 +62,8 @@ export const SessionsListWrapper = React.memo(({
     const machineChoices = React.useMemo(() => collectMachineChoices(machines), [machines]);
     const onlineMachineCount = machineChoices.filter((machine) => machine.online).length;
     const [, setHideArchivedSessions] = useSettingMutable('hideInactiveSessions');
-    // Project history is the default; honor an explicitly saved flat layout.
-    const groupByProject = useSetting('sessionListGrouping') === 'project';
+    // Keep this device in project history mode even when another client syncs a legacy flat preference.
+    const groupByProject = useLocalSetting('sessionListGrouping') === 'project';
     const sessionListViewData = groupByProject ? projectData : visibleData;
     const styles = stylesheet;
 

@@ -567,3 +567,13 @@ describe('persistent project chats', () => {
     expect(all.filter(r => r.type === 'projectChat')).toHaveLength(8);
     expect(all.find(r => r.type === 'folderMore')).toMatchObject({ expanded: true });
  });
+
+it('keeps a device project and three previews above the archive when every chat is archived', () => {
+    const data = [project('Permanent', 'happy', [{ id: '', name: null,
+        sessions: Array.from({ length: 5 }, (_, i) => row({ id: `retired-${i}`, path: '/work/repo', active: false, archived: true })),
+    }])];
+    const rows = buildProjectHomeRows({ data, machines, unknownMachineText: '?', expanded: {},
+        labels: { bots: 'Bots', projects: 'Projects' }, showSessions: true, hasArchivedSessions: true, archiveHidden: true });
+    expect(rows.map(r => r.type)).toEqual(['machine', 'folder', 'projectChat', 'projectChat', 'projectChat', 'folderMore']);
+    expect(rows[1]).toMatchObject({ title: 'Permanent', count: 5 });
+});

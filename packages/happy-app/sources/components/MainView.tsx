@@ -7,7 +7,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StyleSheet, useUnistyles } from 'react-native-unistyles';
-import { useFriendRequests, useRealtimeStatus, useSettingMutable } from '@/sync/storage';
+import { useFriendRequests, useRealtimeStatus, useLocalSettingMutable } from '@/sync/storage';
 import { SESSION_LIST_GROUPING_MODES, type SessionListGrouping } from '@/sync/settings';
 import { NativeSettingsMenu, type NativeSettingsMenuGroup } from './NativeSettingsMenu';
 import { useVisibleSessionListViewData } from '@/hooks/useVisibleSessionListViewData';
@@ -149,7 +149,7 @@ const HeaderRight = React.memo(({ activeTab }: { activeTab: ActiveTabType }) => 
     const router = useRouter();
     const { theme } = useUnistyles();
     const isCustomServer = isUsingCustomServer();
-    const [sessionListGrouping, setSessionListGrouping] = useSettingMutable('sessionListGrouping');
+    const [sessionListGrouping, setSessionListGrouping] = useLocalSettingMutable('sessionListGrouping');
 
     if (activeTab === 'sessions') {
         if (Platform.OS !== 'web') {
